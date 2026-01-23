@@ -1,0 +1,142 @@
+/* ================================
+   DocuMind AI – Global Styles
+   ================================ */
+
+/* ---------- App Background ---------- */
+.stApp {
+    background: radial-gradient(circle at top left,
+            #0f2027,
+            #203a43,
+            #2c5364);
+    color: #eaeaea;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ---------- Headings ---------- */
+h1,
+h2,
+h3,
+h4 {
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+/* ---------- Sidebar ---------- */
+section[data-testid="stSidebar"] {
+    background: rgba(15, 32, 39, 0.95);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3,
+section[data-testid="stSidebar"] p {
+    color: #f5f5f5;
+}
+
+/* ---------- Buttons ---------- */
+.stButton>button {
+    width: 100%;
+    background: linear-gradient(135deg,
+            #4facfe,
+            #00f2fe);
+    color: #0f2027;
+    border: none;
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.stButton>button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 242, 254, 0.35);
+}
+
+/* ---------- Radio & Upload ---------- */
+.stRadio>div,
+.stFileUploader {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.8rem;
+    border-radius: 12px;
+}
+
+/* ---------- Text Input ---------- */
+.stTextInput input {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 0.55rem 0.75rem;
+}
+
+.stTextInput input::placeholder {
+    color: #bbbbbb;
+}
+
+/* ---------- Chat Containers ---------- */
+.chat-container {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* ---------- User Message ---------- */
+.chat-user {
+    background: linear-gradient(135deg,
+            #667eea,
+            #764ba2);
+    color: #ffffff;
+    padding: 0.8rem 1rem;
+    border-radius: 14px;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+/* ---------- AI Message ---------- */
+.chat-ai {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f1f1f1;
+    padding: 0.9rem 1rem;
+    border-radius: 14px;
+    line-height: 1.6;
+}
+
+/* ---------- Confidence Indicators ---------- */
+.conf-high {
+    color: #00e676;
+    font-weight: 600;
+}
+
+.conf-medium {
+    color: #ffd54f;
+    font-weight: 600;
+}
+
+.conf-low {
+    color: #ff5252;
+    font-weight: 600;
+}
+
+/* ---------- Expander ---------- */
+.streamlit-expanderHeader {
+    font-weight: 600;
+    color: #e0e0e0;
+}
+
+/* ---------- Divider ---------- */
+hr {
+    border: none;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    margin: 1rem 0;
+}
+
+/* ---------- Footer Info ---------- */
+.footer-note {
+    text-align: center;
+    font-size: 0.85rem;
+    color: #cccccc;
+    opacity: 0.7;
+}
