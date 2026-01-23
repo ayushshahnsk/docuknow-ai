@@ -14,7 +14,7 @@ from utils.citations import format_citations
 # --------------------------------
 # Page Config
 # --------------------------------
-st.set_page_config(page_title="DocuMind AI", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="DocuKnow AI", page_icon="🧠", layout="wide")
 
 # --------------------------------
 # Session State
@@ -29,7 +29,7 @@ if "chat_history" not in st.session_state:
 # Sidebar
 # --------------------------------
 with st.sidebar:
-    st.markdown("## 🧠 DocuMind AI")
+    st.markdown("## 🧠 DocuKnow AI")
     st.markdown("##### Intelligent Document Assistant")
     st.divider()
 
@@ -56,7 +56,7 @@ with st.sidebar:
 st.markdown(
     """
     <div style="text-align:center">
-        <h1>📄 DocuMind AI</h1>
+        <h1>📄 DocuKnow AI</h1>
         <p>Ask intelligent questions from your documents with speed & accuracy.</p>
     </div>
     """,
@@ -140,7 +140,7 @@ if st.session_state.index_name:
     # Display Chat History
     for chat in reversed(st.session_state.chat_history):
         st.markdown(f"**🧑 You:** {chat['question']}")
-        st.markdown(f"**🤖 DocuMind AI:** {chat['answer']}")
+        st.markdown(f"**🤖 DocuKnow AI:** {chat['answer']}")
 
         conf = chat["confidence"]
         if conf["level"] == "High":

@@ -1,5 +1,5 @@
 """
-Centralized prompt templates for DocuMind AI.
+Centralized prompt templates for DocuKnow AI.
 
 Keeping prompts separate:
 - Improves maintainability
@@ -22,7 +22,7 @@ def build_rag_prompt(query: str, contexts: List[Dict]) -> str:
 
     if not contexts:
         return f"""
-You are DocuMind AI.
+You are DocuKnow AI.
 
 The user asked:
 "{query}"
@@ -41,7 +41,7 @@ Respond with:
     )
 
     prompt = f"""
-You are DocuMind AI, an intelligent document assistant.
+You are DocuKnow AI, an intelligent document assistant.
 
 INSTRUCTIONS (VERY IMPORTANT):
 - Answer ONLY using the information in the CONTEXT.

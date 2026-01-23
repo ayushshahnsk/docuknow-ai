@@ -1,5 +1,5 @@
 """
-Caching utilities for DocuMind AI.
+Caching utilities for DocuKnow AI.
 
 Purpose:
 - Avoid recomputing embeddings

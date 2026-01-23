@@ -1,5 +1,5 @@
 """
-LLM Generator for DocuMind AI.
+LLM Generator for DocuKnow AI.
 
 This module:
 - Builds strict RAG prompts

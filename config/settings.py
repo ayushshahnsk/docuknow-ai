@@ -1,5 +1,5 @@
 """
-Central configuration for DocuMind AI.
+Central configuration for DocuKnow AI.
 
 All tunable parameters live here:
 - Chunking

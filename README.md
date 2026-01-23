@@ -1,6 +1,6 @@
-# 🧠 DocuMind AI
+# 🧠 DocuKnow AI
 
-**DocuMind AI** is an intelligent document assistant built using **Retrieval-Augmented Generation (RAG)** that allows users to ask questions from **single or multiple PDFs** and receive **accurate, citation-aware, confidence-scored answers**.
+**DocuKnow AI** is an intelligent document assistant built using **Retrieval-Augmented Generation (RAG)** that allows users to ask questions from **single or multiple PDFs** and receive **accurate, citation-aware, confidence-scored answers**.
 
 It is designed as a **real-world AI system**, not a demo toy.
 

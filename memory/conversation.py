@@ -1,5 +1,5 @@
 """
-Conversational memory management for DocuMind AI.
+Conversational memory management for DocuKnow AI.
 
 This module:
 - Stores recent Q&A turns
