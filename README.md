@@ -19,5 +19,3 @@ It is designed as a **real-world AI system**, not a demo toy.
 - 🎨 **Modern Streamlit UI**
 
 ---
-
-## 🧩 
