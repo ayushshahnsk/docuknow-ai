@@ -21,3 +21,22 @@ It is designed as a **real-world AI system**, not a demo toy.
 ---
 
 ## 🧩 System Architecture
+
+- User Uploads PDFs
+↓
+- PDF Loader (PyMuPDF)
+↓
+- Smart Chunking
+↓
+- Embeddings (Sentence Transformers)
+↓
+- FAISS Vector Database
+↓
+- Semantic Retriever (Top-K)
+↓
+- LLM Generator (Gemma)
+↓
+- Answer + Confidence + Citations
+
+
+---
