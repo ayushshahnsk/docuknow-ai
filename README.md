@@ -38,10 +38,7 @@ It is designed as a **real-world AI system**, not a demo toy.
 ↓
 - Answer + Confidence + Citations
 
-
 ---
-
-
 
 ## 🛠️ Tech Stack
 
