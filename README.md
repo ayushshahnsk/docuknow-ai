@@ -40,3 +40,23 @@ It is designed as a **real-world AI system**, not a demo toy.
 
 
 ---
+
+
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **Streamlit**
+
+### Backend / AI
+- **Python 3.10+**
+- **Sentence Transformers**
+<!-- - **FAISS** -->
+- **Gemma3:4B (via Ollama)**
+
+### Utilities
+- PyMuPDF
+- NumPy
+- Requests
+
+---
