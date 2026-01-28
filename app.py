@@ -11,14 +11,8 @@ from core.generator import generate_answer
 from utils.confidence import calculate_confidence
 from utils.citations import format_citations
 
-# --------------------------------
-# 🔥 TOKEN UTILS (ADDED)
-# --------------------------------
-def estimate_tokens(text: str) -> int:
-    """Approximate token count (1 token ≈ 4 chars)."""
-    if not text:
-        return 0
-    return max(1, len(text) // 4)
+from analytics.token_tracker import TokenTracker
+from chat.chat_manager import ChatManager
 
 # --------------------------------
 # Page Config
@@ -26,38 +20,99 @@ def estimate_tokens(text: str) -> int:
 st.set_page_config(page_title="DocuKnow AI", page_icon="🧠", layout="wide")
 
 # --------------------------------
-# Session State
+# Init Chat Manager (persistent)
 # --------------------------------
-if "index_name" not in st.session_state:
-    st.session_state.index_name = None
+if "chat_manager" not in st.session_state:
+    st.session_state.chat_manager = ChatManager()
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+chat_manager = st.session_state.chat_manager
 
 # --------------------------------
-# Sidebar
+# Init rename state (IMPORTANT)
+# --------------------------------
+if "renaming_chat" not in st.session_state:
+    st.session_state.renaming_chat = None
+
+# --------------------------------
+# Init token trackers (per chat)
+# --------------------------------
+if "token_trackers" not in st.session_state:
+    st.session_state.token_trackers = {}
+
+# --------------------------------
+# Sidebar – ChatGPT style
 # --------------------------------
 with st.sidebar:
     st.markdown("## 🧠 DocuKnow AI")
-    st.markdown("##### Intelligent Document Assistant")
+    st.caption("History style Document Assistant")
     st.divider()
 
+    st.markdown("### 💬 Chats")
+
+    # ➕ New Chat
+    if st.button("➕ New Chat", use_container_width=True):
+        chat = chat_manager.create_chat("New Chat")
+        st.session_state.token_trackers[chat.chat_id] = TokenTracker()
+        st.rerun()
+
+    # List chats
+    for chat in chat_manager.list_chats():
+        cid = chat["chat_id"]
+
+        cols = st.columns([6, 1, 1])
+
+        # Open chat
+        if cols[0].button(chat["chat_name"], key=f"open_{cid}"):
+            chat_manager.switch_chat(cid)
+            st.rerun()
+
+        # Rename (toggle rename mode)
+        if cols[1].button("✏️", key=f"edit_{cid}"):
+            st.session_state.renaming_chat = cid
+            st.rerun()
+
+        # Delete
+        if cols[2].button("🗑️", key=f"del_{cid}"):
+            chat_manager.delete_chat(cid)
+            st.session_state.token_trackers.pop(cid, None)
+            if st.session_state.renaming_chat == cid:
+                st.session_state.renaming_chat = None
+            st.rerun()
+
+        # Rename input (persistent)
+        if st.session_state.renaming_chat == cid:
+            new_name = st.text_input(
+                "Rename chat",
+                chat["chat_name"],
+                key=f"rename_input_{cid}"
+            )
+            if st.button("✅ Save", key=f"save_{cid}"):
+                chat_manager.rename_chat(cid, new_name)
+                st.session_state.renaming_chat = None
+                st.rerun()
+
+    st.divider()
+
+    # Show active chat PDFs
+    active_chat = chat_manager.get_active_chat()
+    if active_chat and active_chat.pdf_names:
+        st.markdown("### 📄 Active PDFs")
+        for pdf in active_chat.pdf_names:
+            st.caption(pdf)
+
+    st.divider()
+
+    # Upload section
     mode = st.radio("📂 Document Mode", ["Single PDF", "Multiple PDFs"])
 
-    uploaded_files = None
-    if mode == "Single PDF":
-        uploaded_files = st.file_uploader(
-            "Upload a PDF", type=["pdf"], accept_multiple_files=False
-        )
-        if uploaded_files:
-            uploaded_files = [uploaded_files]
-    else:
-        uploaded_files = st.file_uploader(
-            "Upload PDFs", type=["pdf"], accept_multiple_files=True
-        )
+    uploaded_files = st.file_uploader(
+        "Upload PDF(s)",
+        type=["pdf"],
+        accept_multiple_files=(mode == "Multiple PDFs")
+    )
 
     process_btn = st.button("🚀 Process Documents", use_container_width=True)
-    clear_chat = st.button("🧹 Clear Chat", use_container_width=True)
+    clear_chat = st.button("🧹 Clear Messages", use_container_width=True)
 
 # --------------------------------
 # Header
@@ -66,22 +121,37 @@ st.markdown(
     """
     <div style="text-align:center">
         <h1>📄 DocuKnow AI</h1>
-        <p>Ask intelligent questions from your documents with speed & accuracy.</p>
+        <p>Ask intelligent questions from your documents</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 # --------------------------------
-# Clear Chat
+# Active Chat
+# --------------------------------
+active_chat = chat_manager.get_active_chat()
+
+if not active_chat:
+    st.info("👈 Create or select a chat to begin")
+    st.stop()
+
+# Ensure token tracker exists
+if active_chat.chat_id not in st.session_state.token_trackers:
+    st.session_state.token_trackers[active_chat.chat_id] = TokenTracker()
+
+tracker = st.session_state.token_trackers[active_chat.chat_id]
+
+# --------------------------------
+# Clear messages only (not PDFs)
 # --------------------------------
 if clear_chat:
-    st.session_state.chat_history = []
-    st.session_state.index_name = None
+    chat_manager.clear_chat_messages(active_chat.chat_id)
+    tracker.reset()
     st.rerun()
 
 # --------------------------------
-# Process Documents
+# Process Documents (PER CHAT)
 # --------------------------------
 if process_btn:
     if not uploaded_files:
@@ -89,9 +159,18 @@ if process_btn:
     else:
         with st.spinner("Processing documents..."):
             all_chunks = []
+            pdf_names = []
 
             for file in uploaded_files:
-                temp_path = Path(f"data/uploads/{file.name}")
+                # Strict safety: only real UploadedFile
+                if not hasattr(file, "getbuffer") or not hasattr(file, "name"):
+                    st.warning("Invalid file detected. Please re-upload.")
+                    continue
+
+                filename = file.name
+                pdf_names.append(filename)
+
+                temp_path = Path(f"data/uploads/{active_chat.chat_id}_{filename}")
                 temp_path.parent.mkdir(parents=True, exist_ok=True)
 
                 with open(temp_path, "wb") as f:
@@ -101,93 +180,86 @@ if process_btn:
                 chunks = smart_chunk(pages)
 
                 for c in chunks:
-                    c["source"] = file.name
+                    c["source"] = filename
 
                 all_chunks.extend(chunks)
+
+            if not all_chunks:
+                st.error("No valid PDF content found.")
+                st.stop()
 
             texts = [c["text"] for c in all_chunks]
             embeddings = embed_texts(texts)
 
-            index_name = str(uuid.uuid4())
+            # FAISS index isolated per chat
+            index_name = active_chat.chat_id
             create_faiss_index(
-                embeddings=embeddings, metadatas=all_chunks, index_name=index_name
+                embeddings=embeddings,
+                metadatas=all_chunks,
+                index_name=index_name
             )
 
-            st.session_state.index_name = index_name
+            chat_manager.set_index_for_chat(active_chat.chat_id, index_name)
+            chat_manager.set_pdfs_for_chat(active_chat.chat_id, pdf_names)
 
-        st.success("Documents processed successfully! You can now ask questions.")
+        st.success("Documents processed for this chat!")
 
 # --------------------------------
 # Chat Interface
 # --------------------------------
-if st.session_state.index_name:
-    st.markdown("### 💬 Ask Your Documents")
+if active_chat.index_name:
+    st.markdown("### 💬 Conversation")
 
-    query = st.text_input(
-        "Type your question", placeholder="e.g. Explain deadlock in simple terms"
-    )
+    # Display history
+    for msg in active_chat.chat_history:
+        if msg["role"] == "user":
+            st.markdown(f"**🧑 You:** {msg['content']}")
+        else:
+            st.markdown(f"**🤖 DocuKnow AI:** {msg['content']}")
 
-    if st.button("Ask") and query:
+    # 🔥 ChatGPT-style input
+    query = st.chat_input("Message DocuKnow AI…")
+
+    if query:
+        chat_manager.add_user_message(query)
+
         with st.spinner("Thinking..."):
             contexts = retrieve_context(
-                query=query, index_name=st.session_state.index_name, top_k=4
+                query=query,
+                index_name=active_chat.index_name,
+                top_k=4
             )
 
-            # 🔥 TOKEN COUNT (INPUT)
-            context_text = "\n".join(c["text"] for c in contexts)
-            input_tokens = estimate_tokens(query + context_text)
+            context_text = "\n".join(c["text"][:500] for c in contexts)
+            input_tokens = tracker.count_input(query, context_text)
 
             answer = generate_answer(query, contexts)
 
-            # 🔥 TOKEN COUNT (OUTPUT)
-            output_tokens = estimate_tokens(answer)
+            output_tokens = tracker.count_output(answer)
 
             confidence = calculate_confidence(contexts)
             citations = format_citations(contexts)
 
-            st.session_state.chat_history.append(
-                {
-                    "question": query,
-                    "answer": answer,
-                    "confidence": confidence,
-                    "citations": citations,
-                    # 🔥 TOKEN DATA STORED PER MESSAGE
-                    "tokens": {
-                        "input": input_tokens,
-                        "output": output_tokens,
-                        "total": input_tokens + output_tokens,
-                    }
-                }
-            )
+            chat_manager.add_assistant_message(answer)
 
-    # --------------------------------
-    # Display Chat History
-    # --------------------------------
-    for chat in reversed(st.session_state.chat_history):
-        st.markdown(f"**🧑 You:** {chat['question']}")
-        st.markdown(f"**🤖 DocuKnow AI:** {chat['answer']}")
+        st.markdown(f"**🤖 DocuKnow AI:** {answer}")
 
-        conf = chat["confidence"]
-        if conf["level"] == "High":
-            st.success(f"🟢 Confidence: {conf['level']} ({conf['score']})")
-        elif conf["level"] == "Medium":
-            st.warning(f"🟡 Confidence: {conf['level']} ({conf['score']})")
+        if confidence["level"] == "High":
+            st.success(f"🟢 Confidence: {confidence['score']}")
+        elif confidence["level"] == "Medium":
+            st.warning(f"🟡 Confidence: {confidence['score']}")
         else:
-            st.error(f"🔴 Confidence: {conf['level']} ({conf['score']})")
+            st.error(f"🔴 Confidence: {confidence['score']}")
 
         with st.expander("📄 Sources"):
-            for src in chat["citations"]:
+            for src in citations:
                 st.markdown(f"- {src}")
 
-        # 🔥 TOKEN DISPLAY (PREMIUM FEATURE)
-        tokens = chat["tokens"]
         st.caption(
-            f"🧮 Tokens — Input: {tokens['input']} | "
-            f"Output: {tokens['output']} | "
-            f"Total: {tokens['total']}"
+            f"🧮 Tokens — Input: {input_tokens} | "
+            f"Output: {output_tokens} | "
+            f"Total: {input_tokens + output_tokens}"
         )
-
-        st.divider()
 
 else:
     st.info("⬅ Upload and process documents to start asking questions.")

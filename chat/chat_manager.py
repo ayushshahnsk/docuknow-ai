@@ -1,21 +1,21 @@
 """
-Chat Session Manager for DocuMind AI.
+chat_manager.py
 
-This module enables:
-- ChatGPT-style multi-chat sessions
-- Each chat tied to its own documents
-- Independent vector DB, memory & token tracking per chat
-- Safe switching between chats
+Manages ChatGPT-style chat sessions for DocuKnow AI.
 
-Design principle:
-Each chat is fully isolated.
+Responsibilities:
+- Create / rename / delete chats
+- Switch active chat
+- Maintain per-chat state
+- Persist chats via chat_store.py
+- Store per-chat PDF names
+- Ensure isolation between chats
 """
 
 import uuid
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
-from memory.conversation import ConversationMemory
-from analytics.token_tracker import TokenTracker
+from chat.chat_store import save_chat, load_all_chats, delete_chat
 
 
 class ChatSession:
@@ -23,122 +23,169 @@ class ChatSession:
     Represents a single chat session.
     """
 
-    def __init__(self, name: str):
-        self.chat_id: str = str(uuid.uuid4())
-        self.chat_name: str = name
+    def __init__(
+        self,
+        chat_id: str,
+        chat_name: str,
+        index_name: Optional[str] = None,
+        chat_history: Optional[list] = None,
+        pdf_names: Optional[List[str]] = None,
+    ):
+        self.chat_id = chat_id
+        self.chat_name = chat_name
+        self.index_name = index_name
+        self.chat_history = chat_history or []
 
-        # RAG-related
-        self.index_name: Optional[str] = None  # FAISS index id
+        # 🔥 NEW: PDFs attached to this chat only
+        self.pdf_names = pdf_names or []
 
-        # Conversation
-        self.memory = ConversationMemory()
-        self.chat_history = []  # [{"role": "user"/"assistant", "content": str}]
-
-        # Analytics
-        self.token_tracker = TokenTracker()
-
-    def reset(self):
+    def to_dict(self) -> dict:
         """
-        Clear chat memory and analytics (documents remain).
+        Serialize chat for storage.
         """
-        self.memory.clear()
-        self.chat_history.clear()
-        self.token_tracker.reset()
+        return {
+            "chat_id": self.chat_id,
+            "chat_name": self.chat_name,
+            "index_name": self.index_name,
+            "chat_history": self.chat_history,
+            "pdf_names": self.pdf_names,
+        }
 
 
 class ChatManager:
     """
-    Manages multiple ChatSession objects.
+    Handles multiple chat sessions.
     """
 
     def __init__(self):
         self.chats: Dict[str, ChatSession] = {}
         self.active_chat_id: Optional[str] = None
 
-    # -----------------------------
-    # Chat Lifecycle
-    # -----------------------------
-    def create_chat(self, name: str) -> ChatSession:
+        self._load_existing_chats()
+
+    # --------------------------------
+    # Load / Save
+    # --------------------------------
+    def _load_existing_chats(self):
         """
-        Create a new chat session.
+        Load chats from disk at startup.
         """
-        chat = ChatSession(name=name)
-        self.chats[chat.chat_id] = chat
-        self.active_chat_id = chat.chat_id
+        saved_chats = load_all_chats()
+
+        for data in saved_chats:
+            chat = ChatSession(
+                chat_id=data["chat_id"],
+                chat_name=data["chat_name"],
+                index_name=data.get("index_name"),
+                chat_history=data.get("chat_history", []),
+                pdf_names=data.get("pdf_names", []),
+            )
+            self.chats[chat.chat_id] = chat
+
+        # Restore last chat if any
+        if self.chats:
+            self.active_chat_id = next(iter(self.chats))
+
+    def _persist(self, chat: ChatSession):
+        """
+        Save chat to disk.
+        """
+        save_chat(chat.to_dict())
+
+    # --------------------------------
+    # Chat lifecycle
+    # --------------------------------
+    def create_chat(self, chat_name: str = "New Chat") -> ChatSession:
+        chat_id = str(uuid.uuid4())
+        chat = ChatSession(chat_id=chat_id, chat_name=chat_name)
+
+        self.chats[chat_id] = chat
+        self.active_chat_id = chat_id
+
+        self._persist(chat)
         return chat
 
     def delete_chat(self, chat_id: str):
-        """
-        Delete an existing chat.
-        """
         if chat_id in self.chats:
+            delete_chat(chat_id)
             del self.chats[chat_id]
 
             if self.active_chat_id == chat_id:
-                self.active_chat_id = (
-                    next(iter(self.chats), None)
-                )
+                self.active_chat_id = next(iter(self.chats), None)
+
+    def rename_chat(self, chat_id: str, new_name: str):
+        if chat_id in self.chats:
+            self.chats[chat_id].chat_name = new_name
+            self._persist(self.chats[chat_id])
 
     def switch_chat(self, chat_id: str):
-        """
-        Switch active chat.
-        """
         if chat_id in self.chats:
             self.active_chat_id = chat_id
 
-    # -----------------------------
-    # Access Helpers
-    # -----------------------------
+    # --------------------------------
+    # Access helpers
+    # --------------------------------
     def get_active_chat(self) -> Optional[ChatSession]:
-        """
-        Get the currently active chat session.
-        """
         if not self.active_chat_id:
             return None
         return self.chats.get(self.active_chat_id)
 
     def list_chats(self):
         """
-        List all chats (id + name).
+        Used by sidebar UI.
         """
         return [
-            {"chat_id": cid, "chat_name": chat.chat_name}
-            for cid, chat in self.chats.items()
+            {
+                "chat_id": chat.chat_id,
+                "chat_name": chat.chat_name
+            }
+            for chat in self.chats.values()
         ]
 
-    # -----------------------------
-    # Message Handling
-    # -----------------------------
+    # --------------------------------
+    # Message handling
+    # --------------------------------
     def add_user_message(self, message: str):
-        """
-        Add user message to active chat.
-        """
         chat = self.get_active_chat()
         if chat:
             chat.chat_history.append({
                 "role": "user",
                 "content": message
             })
+            self._persist(chat)
 
     def add_assistant_message(self, message: str):
-        """
-        Add assistant message to active chat.
-        """
         chat = self.get_active_chat()
         if chat:
             chat.chat_history.append({
                 "role": "assistant",
                 "content": message
             })
+            self._persist(chat)
 
-    # -----------------------------
-    # Analytics
-    # -----------------------------
-    def get_token_stats(self):
+    # --------------------------------
+    # PDF handling (PER CHAT)
+    # --------------------------------
+    def set_pdfs_for_chat(self, chat_id: str, pdf_names: List[str]):
         """
-        Get token usage stats for active chat.
+        Attach PDF names to a chat.
         """
-        chat = self.get_active_chat()
-        if not chat:
-            return None
-        return chat.token_tracker.get_totals()
+        if chat_id in self.chats:
+            self.chats[chat_id].pdf_names = pdf_names
+            self._persist(self.chats[chat_id])
+
+    def clear_chat_messages(self, chat_id: str):
+        """
+        Clear messages but keep PDFs & index.
+        """
+        if chat_id in self.chats:
+            self.chats[chat_id].chat_history.clear()
+            self._persist(self.chats[chat_id])
+
+    def set_index_for_chat(self, chat_id: str, index_name: str):
+        """
+        Attach FAISS index to chat.
+        """
+        if chat_id in self.chats:
+            self.chats[chat_id].index_name = index_name
+            self._persist(self.chats[chat_id])
