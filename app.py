@@ -82,9 +82,7 @@ with st.sidebar:
         # Rename input (persistent)
         if st.session_state.renaming_chat == cid:
             new_name = st.text_input(
-                "Rename chat",
-                chat["chat_name"],
-                key=f"rename_input_{cid}"
+                "Rename chat", chat["chat_name"], key=f"rename_input_{cid}"
             )
             if st.button("✅ Save", key=f"save_{cid}"):
                 chat_manager.rename_chat(cid, new_name)
@@ -106,13 +104,17 @@ with st.sidebar:
     mode = st.radio("📂 Document Mode", ["Single PDF", "Multiple PDFs"])
 
     uploaded_files = st.file_uploader(
-        "Upload PDF(s)",
-        type=["pdf"],
-        accept_multiple_files=(mode == "Multiple PDFs")
+        "Upload PDF(s)", type=["pdf"], accept_multiple_files=(mode == "Multiple PDFs")
     )
 
     process_btn = st.button("🚀 Process Documents", use_container_width=True)
     clear_chat = st.button("🧹 Clear Messages", use_container_width=True)
+
+    # --------------------------------
+    # Normalize uploaded files (IMPORTANT)
+    # --------------------------------
+    if uploaded_files and not isinstance(uploaded_files, list):
+        uploaded_files = [uploaded_files]
 
 # --------------------------------
 # Header
@@ -194,9 +196,7 @@ if process_btn:
             # FAISS index isolated per chat
             index_name = active_chat.chat_id
             create_faiss_index(
-                embeddings=embeddings,
-                metadatas=all_chunks,
-                index_name=index_name
+                embeddings=embeddings, metadatas=all_chunks, index_name=index_name
             )
 
             chat_manager.set_index_for_chat(active_chat.chat_id, index_name)
@@ -225,9 +225,7 @@ if active_chat.index_name:
 
         with st.spinner("Thinking..."):
             contexts = retrieve_context(
-                query=query,
-                index_name=active_chat.index_name,
-                top_k=4
+                query=query, index_name=active_chat.index_name, top_k=4
             )
 
             context_text = "\n".join(c["text"][:500] for c in contexts)
