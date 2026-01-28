@@ -12,6 +12,15 @@ from utils.confidence import calculate_confidence
 from utils.citations import format_citations
 
 # --------------------------------
+# 🔥 TOKEN UTILS (ADDED)
+# --------------------------------
+def estimate_tokens(text: str) -> int:
+    """Approximate token count (1 token ≈ 4 chars)."""
+    if not text:
+        return 0
+    return max(1, len(text) // 4)
+
+# --------------------------------
 # Page Config
 # --------------------------------
 st.set_page_config(page_title="DocuKnow AI", page_icon="🧠", layout="wide")
@@ -124,7 +133,15 @@ if st.session_state.index_name:
                 query=query, index_name=st.session_state.index_name, top_k=4
             )
 
+            # 🔥 TOKEN COUNT (INPUT)
+            context_text = "\n".join(c["text"] for c in contexts)
+            input_tokens = estimate_tokens(query + context_text)
+
             answer = generate_answer(query, contexts)
+
+            # 🔥 TOKEN COUNT (OUTPUT)
+            output_tokens = estimate_tokens(answer)
+
             confidence = calculate_confidence(contexts)
             citations = format_citations(contexts)
 
@@ -134,10 +151,18 @@ if st.session_state.index_name:
                     "answer": answer,
                     "confidence": confidence,
                     "citations": citations,
+                    # 🔥 TOKEN DATA STORED PER MESSAGE
+                    "tokens": {
+                        "input": input_tokens,
+                        "output": output_tokens,
+                        "total": input_tokens + output_tokens,
+                    }
                 }
             )
 
+    # --------------------------------
     # Display Chat History
+    # --------------------------------
     for chat in reversed(st.session_state.chat_history):
         st.markdown(f"**🧑 You:** {chat['question']}")
         st.markdown(f"**🤖 DocuKnow AI:** {chat['answer']}")
@@ -153,6 +178,14 @@ if st.session_state.index_name:
         with st.expander("📄 Sources"):
             for src in chat["citations"]:
                 st.markdown(f"- {src}")
+
+        # 🔥 TOKEN DISPLAY (PREMIUM FEATURE)
+        tokens = chat["tokens"]
+        st.caption(
+            f"🧮 Tokens — Input: {tokens['input']} | "
+            f"Output: {tokens['output']} | "
+            f"Total: {tokens['total']}"
+        )
 
         st.divider()
 
