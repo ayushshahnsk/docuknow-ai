@@ -12,6 +12,7 @@ so we estimate:
 1 token ≈ 4 characters
 """
 
+
 class TokenTracker:
     def __init__(self):
         self.total_input_tokens = 0
@@ -57,7 +58,7 @@ class TokenTracker:
         return {
             "input": self.total_input_tokens,
             "output": self.total_output_tokens,
-            "total": self.total_input_tokens + self.total_output_tokens
+            "total": self.total_input_tokens + self.total_output_tokens,
         }
 
     def reset(self):
