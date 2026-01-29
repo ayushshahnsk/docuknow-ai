@@ -1,6 +1,7 @@
 import streamlit as st
 from pathlib import Path
 import uuid
+from utils.web_search import web_search
 
 from core.pdf_loader import load_pdf
 from core.chunker import smart_chunk
@@ -224,6 +225,7 @@ if active_chat.index_name:
         chat_manager.add_user_message(query)
 
         with st.spinner("Thinking..."):
+            # 🔹 STEP 1: Retrieve from PDF
             contexts = retrieve_context(
                 query=query, index_name=active_chat.index_name, top_k=4
             )
@@ -231,15 +233,33 @@ if active_chat.index_name:
             context_text = "\n".join(c["text"][:500] for c in contexts)
             input_tokens = tracker.count_input(query, context_text)
 
-            answer = generate_answer(query, contexts)
-
-            output_tokens = tracker.count_output(answer)
+            pdf_answer = generate_answer(query, contexts)
+            output_tokens = tracker.count_output(pdf_answer)
 
             confidence = calculate_confidence(contexts)
             citations = format_citations(contexts)
 
+            # --------------------------------
+            # 🔥 PDF FIRST → WEB SEARCH FALLBACK (ADDED)
+            # --------------------------------
+            if confidence["level"] == "Low":
+                web_answer = web_search(query)
+
+                if web_answer:
+                    answer = "🌐 From internet (not found in PDF):\n\n" + web_answer
+                else:
+                    answer = (
+                        "🌐 From internet (not found in PDF):\n\n"
+                        "No reliable information found."
+                    )
+            else:
+                answer = "📄 From document:\n\n" + pdf_answer
+
             chat_manager.add_assistant_message(answer)
 
+        # --------------------------------
+        # Display Answer
+        # --------------------------------
         st.markdown(f"**🤖 DocuKnow AI:** {answer}")
 
         if confidence["level"] == "High":

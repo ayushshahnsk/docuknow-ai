@@ -24,3 +24,8 @@ requests>=2.31.0
 # Utilities
 # -----------------------------
 python-dotenv>=1.0.0
+
+# -----------------------------
+# Optional: tavily API
+tavily-python
+#-----------------------------
