@@ -135,10 +135,7 @@ class ChatManager:
         Used by sidebar UI.
         """
         return [
-            {
-                "chat_id": chat.chat_id,
-                "chat_name": chat.chat_name
-            }
+            {"chat_id": chat.chat_id, "chat_name": chat.chat_name}
             for chat in self.chats.values()
         ]
 
@@ -148,19 +145,13 @@ class ChatManager:
     def add_user_message(self, message: str):
         chat = self.get_active_chat()
         if chat:
-            chat.chat_history.append({
-                "role": "user",
-                "content": message
-            })
+            chat.chat_history.append({"role": "user", "content": message})
             self._persist(chat)
 
     def add_assistant_message(self, message: str):
         chat = self.get_active_chat()
         if chat:
-            chat.chat_history.append({
-                "role": "assistant",
-                "content": message
-            })
+            chat.chat_history.append({"role": "assistant", "content": message})
             self._persist(chat)
 
     # --------------------------------

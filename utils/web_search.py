@@ -6,13 +6,10 @@ load_dotenv()
 
 client = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
+
 def web_search(query: str) -> str:
     try:
-        response = client.search(
-            query=query,
-            search_depth="basic",
-            max_results=3
-        )
+        response = client.search(query=query, search_depth="basic", max_results=3)
 
         if not response or "results" not in response:
             return None
