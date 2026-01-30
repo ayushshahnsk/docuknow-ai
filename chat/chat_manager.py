@@ -9,6 +9,7 @@ Responsibilities:
 - Maintain per-chat state
 - Persist chats via chat_store.py
 - Store per-chat PDF names
+- Store per-chat model preferences
 - Ensure isolation between chats
 """
 
@@ -30,14 +31,22 @@ class ChatSession:
         index_name: Optional[str] = None,
         chat_history: Optional[list] = None,
         pdf_names: Optional[List[str]] = None,
+        model_pref: Optional[dict] = None,
     ):
         self.chat_id = chat_id
         self.chat_name = chat_name
         self.index_name = index_name
         self.chat_history = chat_history or []
 
-        # 🔥 NEW: PDFs attached to this chat only
+        # PDFs attached to this chat only
         self.pdf_names = pdf_names or []
+
+        # Model preference (per chat)
+        # type: "ollama" | "api"
+        self.model_pref = model_pref or {
+            "type": "ollama",
+            "api_key": None,
+        }
 
     def to_dict(self) -> dict:
         """
@@ -49,6 +58,7 @@ class ChatSession:
             "index_name": self.index_name,
             "chat_history": self.chat_history,
             "pdf_names": self.pdf_names,
+            "model_pref": self.model_pref,
         }
 
 
@@ -79,6 +89,7 @@ class ChatManager:
                 index_name=data.get("index_name"),
                 chat_history=data.get("chat_history", []),
                 pdf_names=data.get("pdf_names", []),
+                model_pref=data.get("model_pref"),
             )
             self.chats[chat.chat_id] = chat
 
@@ -179,4 +190,24 @@ class ChatManager:
         """
         if chat_id in self.chats:
             self.chats[chat_id].index_name = index_name
+            self._persist(self.chats[chat_id])
+
+    # --------------------------------
+    # Model preference (PER CHAT)
+    # --------------------------------
+    def set_model_pref(
+        self,
+        chat_id: str,
+        model_type: str,
+        api_key: Optional[str] = None,
+    ):
+        """
+        Set model preference for a chat.
+        model_type: "ollama" or "api"
+        """
+        if chat_id in self.chats:
+            self.chats[chat_id].model_pref = {
+                "type": model_type,
+                "api_key": api_key,
+            }
             self._persist(self.chats[chat_id])
