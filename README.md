@@ -191,3 +191,19 @@ Settings UI
 PDF Manager UI
 
 Logic must remain unchanged
+
+---
+
+🧠 Key Rule (Applies to ALL Versions)
+
+Do NOT break existing core logic
+
+No mixing of versions
+
+Each version is:
+
+Independent
+
+Incremental
+
+Backward-safe
