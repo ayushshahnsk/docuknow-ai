@@ -51,3 +51,14 @@ CONFIDENCE_MEDIUM = 0.55
 # -----------------------------
 ENABLE_CACHING = True
 MAX_CHAT_HISTORY = 10  # prevent prompt from growing too large
+
+# -----------------------------
+# OCR Settings
+# -----------------------------
+ENABLE_OCR = True  # Master switch for OCR
+OCR_LANGUAGES = ['en']  # Languages for OCR
+OCR_USE_GPU = False  # Use GPU for OCR if available
+OCR_TEXT_THRESHOLD = 0.1  # Minimum text ratio to avoid OCR (10%)
+
+# PDF Detection
+PDF_MIN_TEXT_LENGTH = 50  # Minimum characters to consider as text page

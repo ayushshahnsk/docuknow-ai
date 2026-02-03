@@ -23,6 +23,8 @@ venv/
 data/uploads/
 data/vector_db/
 data/chats/
+data/temp/
+data/tts_cache/
 
 # ================================
 # OS / Editor Files
