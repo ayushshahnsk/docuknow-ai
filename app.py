@@ -319,7 +319,10 @@ if active_chat.index_name:
             confidence = calculate_confidence(contexts)
 
             if confidence["level"] == "Low":
-                raw_web = web_search(query)
+                api_key = None
+                if active_chat.model_pref["type"] == "api":
+                    api_key = active_chat.model_pref.get("api_key")
+                raw_web = web_search(query, api_key=api_key)
                 answer = raw_web[:800].strip() if raw_web else "No reliable information found."
                 source_type = "internet"
             else:
