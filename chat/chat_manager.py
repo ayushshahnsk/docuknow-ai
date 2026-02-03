@@ -159,10 +159,20 @@ class ChatManager:
             chat.chat_history.append({"role": "user", "content": message})
             self._persist(chat)
 
-    def add_assistant_message(self, message: str):
+    def add_assistant_message(self, message: str, source: str):
+        """
+        Store assistant message with source.
+        source: "pdf" | "internet"
+        """
         chat = self.get_active_chat()
         if chat:
-            chat.chat_history.append({"role": "assistant", "content": message})
+            chat.chat_history.append(
+                {
+                    "role": "assistant",
+                    "content": message,
+                    "source": source,
+                }
+            )
             self._persist(chat)
 
     # --------------------------------

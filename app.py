@@ -135,7 +135,6 @@ if st.session_state.show_settings:
 
     left, right = st.columns([1, 3])
 
-    # -------- Left menu --------
     with left:
         if st.button("📂 PDF Manager", use_container_width=True):
             st.session_state.settings_tab = "pdf"
@@ -149,9 +148,7 @@ if st.session_state.show_settings:
             st.session_state.show_settings = False
             st.rerun()
 
-    # -------- Right panel --------
     with right:
-        # ================= PDF MANAGER =================
         if st.session_state.settings_tab == "pdf":
             st.markdown("### 📂 PDF Manager")
             st.caption("Upload and activate PDFs for this chat")
@@ -176,18 +173,12 @@ if st.session_state.show_settings:
                 for i, pdf in enumerate(st.session_state.settings_uploaded_pdfs):
                     c1, c2 = st.columns([1, 6])
                     with c1:
-                        checked = st.checkbox(
-                            "",
-                            value=True,
-                            key=f"pdf_active_{i}",
-                        )
+                        checked = st.checkbox("", value=True, key=f"pdf_active_{i}")
                         if checked:
                             selected_indices.append(i)
-
                     with c2:
                         st.markdown(f"📄 **{pdf.name}**")
 
-            # -------- SAVE & PROCESS PDFs --------
             if st.button("💾 Save & Process PDFs", use_container_width=True):
                 active_chat = chat_manager.get_active_chat()
 
@@ -239,7 +230,6 @@ if st.session_state.show_settings:
                 st.session_state.show_settings = False
                 st.rerun()
 
-        # ================= MODEL / API =================
         elif st.session_state.settings_tab == "model":
             st.markdown("### 🧠 Model / API Settings")
             st.caption("Custom API will safely fallback to Ollama for now")
@@ -299,10 +289,18 @@ if active_chat.index_name:
                 unsafe_allow_html=True,
             )
         else:
+            source = msg.get("source", "pdf")
+
             st.markdown(
-                f"<div style='font-size:16px; line-height:1.6; margin-bottom:12px;'><b>🤖 DocuKnow AI:</b><br>{msg['content']}</div>",
+                f"<div style='font-size:16px; line-height:1.6; margin-bottom:6px;'>"
+                f"<b>🤖 DocuKnow AI:</b><br>{msg['content']}</div>",
                 unsafe_allow_html=True,
             )
+
+            if source == "pdf":
+                st.caption("📄 Answer sourced from document")
+            else:
+                st.caption("🌐 Answer sourced from internet")
 
     query = st.chat_input("Message DocuKnow AI…")
 
@@ -315,13 +313,13 @@ if active_chat.index_name:
             tracker.count_input(query, context_text)
 
             pdf_answer = generate_answer(query, contexts)
-
             confidence = calculate_confidence(contexts)
 
             if confidence["level"] == "Low":
                 api_key = None
                 if active_chat.model_pref["type"] == "api":
                     api_key = active_chat.model_pref.get("api_key")
+
                 raw_web = web_search(query, api_key=api_key)
                 answer = raw_web[:800].strip() if raw_web else "No reliable information found."
                 source_type = "internet"
@@ -330,12 +328,13 @@ if active_chat.index_name:
                 source_type = "pdf"
 
             tracker.count_output(answer)
-            chat_manager.add_assistant_message(answer)
+            chat_manager.add_assistant_message(answer, source_type)
             st.rerun()
 
         if source_type == "pdf":
             st.divider()
             st.success(f"Confidence Score: {confidence['score']}")
+
             citations = format_citations(contexts)
             with st.expander("📄 Sources"):
                 for src in citations:
