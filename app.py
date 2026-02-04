@@ -10,7 +10,7 @@ from core.retriever import retrieve_context
 from core.generator import generate_answer
 from core.ocr_processor import OCRProcessor
 from core.pdf_detector import detect_pdf_type
-from core.tts_processor import TTSProcessor  # NEW: TTS processor
+from core.tts_processor import TTSProcessor
 
 from utils.confidence import calculate_confidence
 from utils.citations import format_citations
@@ -63,17 +63,15 @@ if "ocr_languages" not in st.session_state:
 if "ocr_use_gpu" not in st.session_state:
     st.session_state.ocr_use_gpu = False
 
-# ======================================================
-# TTS STATE (NEW)
-# ======================================================
+# TTS State
 if "tts_processor" not in st.session_state:
     st.session_state.tts_processor = TTSProcessor()
 
 if "current_playing_audio" not in st.session_state:
-    st.session_state.current_playing_audio = None  # Currently playing audio data
+    st.session_state.current_playing_audio = None
 
 if "current_playing_index" not in st.session_state:
-    st.session_state.current_playing_index = None  # Index of message being played
+    st.session_state.current_playing_index = None
 
 if "tts_paused" not in st.session_state:
     st.session_state.tts_paused = False
@@ -81,16 +79,36 @@ if "tts_paused" not in st.session_state:
 if "tts_language" not in st.session_state:
     st.session_state.tts_language = "en"
 
+# ======================================================
+# NEW: DEBUG STATE VARIABLES FOR SOURCE SELECTION ISSUE
+# ======================================================
+if "show_source_debug" not in st.session_state:
+    st.session_state.show_source_debug = False
+
+if "last_fallback_reason" not in st.session_state:
+    st.session_state.last_fallback_reason = None
+
+if "last_confidence" not in st.session_state:
+    st.session_state.last_confidence = None
+
+if "last_context_count" not in st.session_state:
+    st.session_state.last_context_count = 0
+
+if "force_pdf_only" not in st.session_state:
+    st.session_state.force_pdf_only = False
+
+if "low_confidence_threshold" not in st.session_state:
+    st.session_state.low_confidence_threshold = 0.3  # NEW: Configurable threshold
+
 chat_manager = st.session_state.chat_manager
 
 # ======================================================
-# TTS HELPER FUNCTIONS (NEW)
+# TTS HELPER FUNCTIONS
 # ======================================================
 
 def play_tts(text: str, message_index: int):
     """Generate and play TTS audio for given text."""
     try:
-        # Generate audio
         audio_base64 = st.session_state.tts_processor.text_to_audio(
             text, 
             st.session_state.tts_language
@@ -155,7 +173,7 @@ with st.sidebar:
         cols = st.columns([6, 1, 1])
 
         if cols[0].button(chat["chat_name"], key=f"open_{cid}"):
-            cleanup_tts_on_chat_switch()  # NEW: Stop audio on chat switch
+            cleanup_tts_on_chat_switch()
             chat_manager.switch_chat(cid)
             st.rerun()
 
@@ -240,9 +258,15 @@ if st.session_state.show_settings:
         if st.button("🔍 OCR Techniques", use_container_width=True):
             st.session_state.settings_tab = "ocr_tech"
         
-        # NEW: TTS Settings tab
         if st.button("🔊 TTS Settings", use_container_width=True):
             st.session_state.settings_tab = "tts_settings"
+        
+        # ======================================================
+        # NEW: DEBUG SETTINGS BUTTON FOR SOURCE SELECTION ISSUE
+        # ======================================================
+        if st.button("🐛 Debug Settings", use_container_width=True):
+            st.session_state.settings_tab = "debug_settings"
+            st.session_state.show_source_debug = True
         
         st.divider()
         
@@ -295,16 +319,13 @@ if st.session_state.show_settings:
 
                 all_chunks = []
                 pdf_names = []
-                processing_info = []  # Store processing info for each PDF
+                processing_info = []
 
-                # Create processing status container
                 status_container = st.empty()
                 
                 with st.spinner("Processing PDFs..."):
                     for file_idx, file in enumerate(selected_files):
                         pdf_names.append(file.name)
-                        
-                        # Update status
                         status_container.info(f"Processing {file.name} ({file_idx + 1}/{len(selected_files)})...")
 
                         temp_path = Path(
@@ -315,10 +336,8 @@ if st.session_state.show_settings:
                         with open(temp_path, "wb") as f:
                             f.write(file.getbuffer())
 
-                        # Load PDF with OCR support
                         pages = load_pdf(str(temp_path))
                         
-                        # Collect processing info
                         if pages:
                             processing_method = pages[0].get("processed_with", "unknown")
                             processing_info.append({
@@ -346,10 +365,8 @@ if st.session_state.show_settings:
                     chat_manager.set_index_for_chat(active_chat.chat_id, index_name)
                     chat_manager.set_pdfs_for_chat(active_chat.chat_id, pdf_names)
                 
-                # Show processing summary
                 st.success("PDFs processed and activated!")
                 
-                # Display processing details
                 with st.expander("📊 Processing Details", expanded=False):
                     for info in processing_info:
                         method_icon = "🔤" if info["method"] == "text_extraction" else "🖼️"
@@ -380,6 +397,22 @@ if st.session_state.show_settings:
                     value=pref.get("api_key") or "",
                 )
 
+            # ======================================================
+            # NEW: FORCE PDF-ONLY MODE OPTION
+            # ======================================================
+            st.divider()
+            st.markdown("#### 📄 PDF Answer Behavior")
+            
+            force_pdf_only = st.checkbox(
+                "Force PDF answers only (disable web search)",
+                value=st.session_state.force_pdf_only,
+                help="Always use PDF content even with low confidence. Useful when PDF has answer but system shows internet answer."
+            )
+            st.session_state.force_pdf_only = force_pdf_only
+            
+            if force_pdf_only:
+                st.info("✅ Web search disabled. All answers will come from your PDFs only.")
+
             if st.button("💾 Save Model Settings", use_container_width=True):
                 if choice == "Ollama (Local)":
                     chat_manager.set_model_pref(active_chat.chat_id, "ollama")
@@ -396,7 +429,6 @@ if st.session_state.show_settings:
             st.markdown("### 🌐 Tavily API Setup Guide")
             st.caption("How to get a free API key for web search functionality")
             
-            # Step-by-step guide
             st.markdown("""
             #### 📋 Step 1: Sign up for Tavily
             1. Go to [Tavily's website](https://tavily.com)
@@ -432,7 +464,6 @@ if st.session_state.show_settings:
             - You can revoke your API key anytime from Tavily's dashboard
             """)
             
-            # Quick actions
             st.divider()
             st.markdown("#### 🚀 Quick Actions")
             
@@ -447,7 +478,6 @@ if st.session_state.show_settings:
                     st.session_state.settings_tab = "model"
                     st.rerun()
             
-            # Test API Key section (optional)
             st.divider()
             st.markdown("#### 🧪 Test Your API Key")
             
@@ -463,7 +493,6 @@ if st.session_state.show_settings:
                 
                 with st.spinner("Testing API connection..."):
                     try:
-                        # Test the API key
                         client = TavilyClient(api_key=test_api_key)
                         response = client.search(query="test", max_results=1)
                         
@@ -475,7 +504,6 @@ if st.session_state.show_settings:
                     except Exception as e:
                         st.error(f"❌ API key test failed: {str(e)}")
             
-            # Footer note
             st.divider()
             st.caption("💡 Need help? Visit [Tavily Documentation](https://docs.tavily.com)")
         
@@ -483,7 +511,6 @@ if st.session_state.show_settings:
             st.markdown("### 🔍 OCR Techniques & Models")
             st.caption("Configure and test OCR processing for scanned/image PDFs")
             
-            # OCR Information Section
             with st.expander("📚 About OCR in DocuKnow AI", expanded=True):
                 st.markdown("""
                 #### What is OCR?
@@ -508,13 +535,11 @@ if st.session_state.show_settings:
             
             st.divider()
             
-            # OCR Configuration Section
             st.markdown("#### ⚙️ OCR Configuration")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                # Language selection
                 languages = st.multiselect(
                     "OCR Languages",
                     options=["en", "es", "fr", "de", "it", "pt", "ru", "zh", "ja", "ko", "ar", "hi"],
@@ -525,7 +550,6 @@ if st.session_state.show_settings:
                     st.session_state.ocr_languages = languages
             
             with col2:
-                # GPU option
                 use_gpu = st.checkbox(
                     "Use GPU acceleration",
                     value=st.session_state.ocr_use_gpu,
@@ -540,7 +564,6 @@ if st.session_state.show_settings:
             
             st.divider()
             
-            # OCR Test Section
             st.markdown("#### 🧪 Test OCR Processing")
             st.caption("Upload a scanned/image PDF to test OCR extraction")
             
@@ -559,14 +582,12 @@ if st.session_state.show_settings:
             with col_test1:
                 if st.button("🔍 Analyze PDF Type", use_container_width=True):
                     if st.session_state.ocr_test_file:
-                        # Save uploaded file temporarily
                         temp_path = Path(f"data/temp/ocr_test_{st.session_state.ocr_test_file.name}")
                         temp_path.parent.mkdir(parents=True, exist_ok=True)
                         
                         with open(temp_path, "wb") as f:
                             f.write(st.session_state.ocr_test_file.getbuffer())
                         
-                        # Analyze PDF
                         pdf_type, text_ratio = detect_pdf_type(str(temp_path))
                         
                         st.session_state.ocr_test_result = {
@@ -587,14 +608,12 @@ if st.session_state.show_settings:
             with col_test2:
                 if st.button("🚀 Run OCR Test", use_container_width=True):
                     if st.session_state.ocr_test_file:
-                        # Save uploaded file temporarily
                         temp_path = Path(f"data/temp/ocr_test_{st.session_state.ocr_test_file.name}")
                         temp_path.parent.mkdir(parents=True, exist_ok=True)
                         
                         with open(temp_path, "wb") as f:
                             f.write(st.session_state.ocr_test_file.getbuffer())
                         
-                        # Run OCR
                         with st.spinner("Running OCR (this may take a minute)..."):
                             try:
                                 ocr_processor = OCRProcessor(
@@ -602,7 +621,6 @@ if st.session_state.show_settings:
                                     gpu=st.session_state.ocr_use_gpu
                                 )
                                 
-                                # Process with OCR
                                 pages = ocr_processor.process_pdf(str(temp_path))
                                 
                                 if pages:
@@ -619,7 +637,6 @@ if st.session_state.show_settings:
                             except Exception as e:
                                 st.error(f"OCR Error: {str(e)}")
             
-            # Display OCR Test Results
             if st.session_state.ocr_test_result:
                 st.divider()
                 st.markdown("#### 📊 OCR Test Results")
@@ -662,7 +679,6 @@ if st.session_state.show_settings:
             
             st.divider()
             
-            # Performance Tips
             with st.expander("💡 OCR Performance Tips", expanded=False):
                 st.markdown("""
                 #### For Better OCR Results:
@@ -683,18 +699,15 @@ if st.session_state.show_settings:
                 - **Multi-page TIFF** (coming soon)
                 """)
             
-            # Reset button
             if st.button("🔄 Reset Test", use_container_width=True):
                 st.session_state.ocr_test_file = None
                 st.session_state.ocr_test_result = None
                 st.rerun()
         
-        # NEW: TTS Settings Tab
         elif st.session_state.settings_tab == "tts_settings":
             st.markdown("### 🔊 Text-to-Speech Settings")
             st.caption("Configure audio playback for AI answers")
             
-            # TTS Information
             with st.expander("📚 About TTS", expanded=True):
                 st.markdown("""
                 #### 🎧 Text-to-Speech Features
@@ -717,10 +730,8 @@ if st.session_state.show_settings:
             
             st.divider()
             
-            # TTS Configuration
             st.markdown("#### ⚙️ TTS Configuration")
             
-            # Language selection
             tts_language = st.selectbox(
                 "Voice Language",
                 options=[
@@ -740,12 +751,10 @@ if st.session_state.show_settings:
                 help="Select language for the TTS voice"
             )
             
-            # Update language in session state
             if tts_language[1] != st.session_state.tts_language:
                 st.session_state.tts_language = tts_language[1]
-                st.session_state.tts_processor.clear_cache()  # Clear cache when language changes
+                st.session_state.tts_processor.clear_cache()
             
-            # Voice speed (optional)
             voice_speed = st.select_slider(
                 "Voice Speed",
                 options=["Slow", "Normal", "Fast"],
@@ -755,7 +764,6 @@ if st.session_state.show_settings:
             
             st.divider()
             
-            # TTS Test Section
             st.markdown("#### 🧪 Test TTS Voice")
             st.caption("Enter text to test the current TTS settings")
             
@@ -778,7 +786,6 @@ if st.session_state.show_settings:
                             )
                             
                             if audio_base64:
-                                # Display audio player
                                 audio_html = f"""
                                 <audio controls autoplay>
                                     <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
@@ -798,7 +805,6 @@ if st.session_state.show_settings:
             
             st.divider()
             
-            # TTS Management
             st.markdown("#### 🗂️ Audio Management")
             
             col_mgmt1, col_mgmt2 = st.columns(2)
@@ -813,7 +819,6 @@ if st.session_state.show_settings:
                     stop_tts()
                     st.success("All audio stopped!")
             
-            # Current Status
             with st.expander("📊 Current TTS Status", expanded=False):
                 st.write(f"**Current Language**: {tts_language[0]}")
                 st.write(f"**Voice Speed**: {voice_speed}")
@@ -824,7 +829,6 @@ if st.session_state.show_settings:
                 else:
                     st.info("🔇 No audio currently playing")
             
-            # Tips
             with st.expander("💡 Usage Tips", expanded=False):
                 st.markdown("""
                 #### For Best Experience:
@@ -842,6 +846,113 @@ if st.session_state.show_settings:
                 - Max ~4000 characters per conversion
                 - Audio quality depends on connection
                 """)
+        
+        # ======================================================
+        # NEW: DEBUG SETTINGS TAB FOR SOURCE SELECTION ISSUE
+        # ======================================================
+        elif st.session_state.settings_tab == "debug_settings":
+            st.markdown("### 🐛 Source Selection Debug")
+            st.caption("Debug why PDF answers are being skipped for web search")
+            
+            st.warning("""
+            **Problem Detected:** PDF has answer but system shows internet answer.
+            Use these tools to diagnose and fix the issue.
+            """)
+            
+            st.divider()
+            
+            # Debug Information Display
+            st.markdown("#### 📊 Last Query Analysis")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.session_state.last_confidence:
+                    confidence_value = st.session_state.last_confidence
+                    confidence_color = "🟢" if confidence_value >= 0.75 else "🟡" if confidence_value >= 0.55 else "🔴"
+                    st.metric("Confidence Score", f"{confidence_value} {confidence_color}")
+                else:
+                    st.metric("Confidence Score", "No data")
+            
+            with col2:
+                if st.session_state.last_context_count:
+                    st.metric("Contexts Found", st.session_state.last_context_count)
+                else:
+                    st.metric("Contexts Found", "No data")
+            
+            if st.session_state.last_fallback_reason:
+                st.info(f"**Last Fallback Reason:** {st.session_state.last_fallback_reason}")
+            
+            st.divider()
+            
+            # Configuration Adjustments
+            st.markdown("#### ⚙️ Source Selection Configuration")
+            
+            # Threshold adjustment
+            new_threshold = st.slider(
+                "Low Confidence Threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=st.session_state.low_confidence_threshold,
+                step=0.05,
+                help="PDF answers with confidence BELOW this will consider web search. Lower = more PDF answers."
+            )
+            st.session_state.low_confidence_threshold = new_threshold
+            
+            st.info(f"""
+            **Current Settings:**
+            - Low Confidence Threshold: **{new_threshold}**
+            - Force PDF Only: **{'Enabled' if st.session_state.force_pdf_only else 'Disabled'}**
+            - Debug Mode: **{'Enabled' if st.session_state.show_source_debug else 'Disabled'}**
+            """)
+            
+            # Quick fixes
+            st.divider()
+            st.markdown("#### 🔧 Quick Fixes")
+            
+            col_fix1, col_fix2 = st.columns(2)
+            
+            with col_fix1:
+                if st.button("📄 Force PDF Answers", use_container_width=True):
+                    st.session_state.force_pdf_only = True
+                    st.success("✅ PDF-only mode enabled! System will never use web search.")
+                    st.rerun()
+            
+            with col_fix2:
+                if st.button("🌐 Allow Web Search", use_container_width=True):
+                    st.session_state.force_pdf_only = False
+                    st.success("✅ Web search re-enabled.")
+                    st.rerun()
+            
+            # Test query
+            st.divider()
+            st.markdown("#### 🧪 Test Query Analysis")
+            
+            test_query = st.text_input("Enter test query to analyze:", placeholder="e.g., 'What is mentioned about taxes?'")
+            
+            if test_query and st.button("🔍 Analyze This Query", use_container_width=True):
+                if active_chat and active_chat.index_name:
+                    with st.spinner("Analyzing query..."):
+                        contexts = retrieve_context(test_query, active_chat.index_name)
+                        confidence = calculate_confidence(contexts)
+                        
+                        st.success(f"**Analysis Complete:**")
+                        st.write(f"- Contexts found: {len(contexts)}")
+                        st.write(f"- Confidence score: {confidence['score']}")
+                        st.write(f"- Confidence level: {confidence['level']}")
+                        
+                        if confidence['score'] < st.session_state.low_confidence_threshold:
+                            st.warning(f"⚠️ This query would trigger web search (score {confidence['score']} < threshold {st.session_state.low_confidence_threshold})")
+                        else:
+                            st.success(f"✅ This query would use PDF answer (score {confidence['score']} ≥ threshold {st.session_state.low_confidence_threshold})")
+            
+            # Reset debug data
+            st.divider()
+            if st.button("🔄 Reset Debug Data", use_container_width=True):
+                st.session_state.last_fallback_reason = None
+                st.session_state.last_confidence = None
+                st.session_state.last_context_count = 0
+                st.success("Debug data cleared!")
+                st.rerun()
     
     st.markdown("---")
 
@@ -863,12 +974,18 @@ tracker = st.session_state.token_trackers[active_chat.chat_id]
 if active_chat and active_chat.pdf_names:
     st.caption("📄 " + ", ".join(active_chat.pdf_names))
     
-    # Optional: Add OCR processing info display
     with st.expander("📊 Document Processing Info", expanded=False):
         st.write("Documents are automatically processed with:")
         st.write("- 🔤 Text extraction for searchable PDFs")
         st.write("- 🖼️ OCR for scanned/image PDFs")
         st.write("*Processing method is determined automatically*")
+    
+    # ======================================================
+    # NEW: SHOW CURRENT SOURCE SELECTION SETTINGS
+    # ======================================================
+    if st.session_state.force_pdf_only:
+        st.info("📄 **PDF-Only Mode**: Web search disabled. All answers from your PDFs.")
+    
     st.divider()
 
 if active_chat.index_name:
@@ -889,7 +1006,6 @@ if active_chat.index_name:
             col1, col2 = st.columns([6, 1])
             
             with col1:
-                # Display the assistant message
                 st.markdown(
                     f"<div style='font-size:16px; line-height:1.6; margin-bottom:6px;'>"
                     f"<b>🤖 DocuKnow AI:</b><br>{message_content}</div>",
@@ -897,49 +1013,58 @@ if active_chat.index_name:
                 )
 
             with col2:
-                # TTS Play Button
-                if len(message_content.strip()) > 10:  # Only show for substantial answers
+                if len(message_content.strip()) > 10:
                     if is_currently_playing(idx):
-                        # Show pause button if this message is playing
                         if st.button("⏸️", key=f"pause_{idx}", help="Pause audio"):
                             pause_tts()
                             st.rerun()
                     else:
-                        # Show play button
                         if st.button("🔊", key=f"play_{idx}", help="Listen to this answer"):
                             play_tts(message_content, idx)
                             st.rerun()
 
             # Apply STRICT rules for source display
             if source == "pdf":
-                # PDF source: Show source indicator
                 st.caption("✅ Answer sourced from document")
                 
-                # Check if we have contexts stored for this message
+                # ======================================================
+                # NEW: SHOW CONFIDENCE SCORE IF AVAILABLE
+                # ======================================================
                 if f"contexts_{idx}" in st.session_state.get("message_contexts", {}):
                     contexts = st.session_state.message_contexts[f"contexts_{idx}"]
                     if contexts:
                         confidence = calculate_confidence(contexts)
                         
-                        # Display confidence score
-                        st.success(f"Confidence Score: {confidence['score']}")
+                        # Show confidence with color coding
+                        confidence_color = "green" if confidence["score"] >= 0.75 else "orange" if confidence["score"] >= 0.55 else "red"
+                        st.markdown(
+                            f'<span style="color:{confidence_color}; font-weight:bold;">'
+                            f'Confidence Score: {confidence["score"]} ({confidence["level"]})'
+                            f'</span>',
+                            unsafe_allow_html=True
+                        )
                         
-                        # Display citations in expander
                         citations = format_citations(contexts)
                         if citations:
                             with st.expander("📄 Sources"):
                                 for src in citations:
                                     st.markdown(f"- {src}")
             else:
-                # Internet source: Only show source indicator
                 st.caption("✅ Answer sourced from internet")
-                # Do NOT show citations or confidence score for internet answers
+                
+                # ======================================================
+                # NEW: SHOW WHY WEB SEARCH WAS USED (DEBUG INFO)
+                # ======================================================
+                if st.session_state.show_source_debug and st.session_state.last_fallback_reason:
+                    with st.expander("ℹ️ Why web search was used", expanded=False):
+                        st.write(st.session_state.last_fallback_reason)
+                        if st.session_state.last_confidence:
+                            st.write(f"PDF confidence: {st.session_state.last_confidence}")
             
             # Show audio player if this message is playing
             if st.session_state.current_playing_index == idx and st.session_state.current_playing_audio:
                 st.markdown("---")
                 
-                # Audio player
                 audio_html = f"""
                 <audio id="audioPlayer_{idx}" controls autoplay>
                     <source src="data:audio/mp3;base64,{st.session_state.current_playing_audio}" type="audio/mp3">
@@ -949,14 +1074,11 @@ if active_chat.index_name:
                 <script>
                     var audio = document.getElementById('audioPlayer_{idx}');
                     
-                    // Handle pause state
                     if ({str(st.session_state.tts_paused).lower()}) {{
                         audio.pause();
                     }}
                     
-                    // When audio ends, clear playing state
                     audio.onended = function() {{
-                        // This would need Streamlit communication to clear state
                         console.log('Audio ended');
                     }};
                 </script>
@@ -964,7 +1086,6 @@ if active_chat.index_name:
                 
                 st.markdown(audio_html, unsafe_allow_html=True)
                 
-                # Audio controls
                 col_controls = st.columns([1, 1, 1, 7])
                 
                 with col_controls[0]:
@@ -983,7 +1104,6 @@ if active_chat.index_name:
                         st.rerun()
                 
                 with col_controls[2]:
-                    # Volume control (simplified)
                     current_volume = st.select_slider(
                         "Volume",
                         options=["🔈", "🔉", "🔊"],
@@ -1012,41 +1132,95 @@ if active_chat.index_name:
             # Generate answer from PDF context
             pdf_answer = generate_answer(query, contexts)
             confidence = calculate_confidence(contexts)
-
-            # Decision: PDF vs Internet source
-            if confidence["level"] == "Low":
-                # Low confidence: Use web search
+            
+            # ======================================================
+            # NEW: SMART SOURCE SELECTION ALGORITHM (FIXED VERSION)
+            # This replaces the old "if confidence['level'] == 'Low'" logic
+            # ======================================================
+            
+            # Store debug information
+            st.session_state.last_confidence = confidence["score"]
+            st.session_state.last_context_count = len(contexts)
+            
+            # Initialize decision variables
+            use_pdf_answer = True
+            fallback_reason = None
+            
+            # ======================================================
+            # FACTOR 1: Check if FORCE PDF ONLY mode is enabled
+            # ======================================================
+            if st.session_state.force_pdf_only:
+                use_pdf_answer = True
+                fallback_reason = "Force PDF-only mode enabled"
+            
+            # ======================================================
+            # FACTOR 2: Check if PDF answer is valid
+            # ======================================================
+            elif not pdf_answer or pdf_answer.strip() == "I am not confident based on the provided documents.":
+                use_pdf_answer = False
+                fallback_reason = "PDF returned 'not confident' answer"
+            
+            # ======================================================
+            # FACTOR 3: Check confidence against configurable threshold
+            # ======================================================
+            elif confidence["score"] < st.session_state.low_confidence_threshold:
+                use_pdf_answer = False
+                fallback_reason = f"Low confidence ({confidence['score']} < {st.session_state.low_confidence_threshold})"
+            
+            # ======================================================
+            # FACTOR 4: Check answer quality (not too short)
+            # ======================================================
+            elif len(pdf_answer.strip()) < 20:
+                use_pdf_answer = False
+                fallback_reason = "PDF answer too short/insufficient"
+            
+            # ======================================================
+            # DECISION: Use PDF or Web search
+            # ======================================================
+            if not use_pdf_answer:
+                # Consider web search
                 api_key = None
                 if active_chat.model_pref["type"] == "api":
                     api_key = active_chat.model_pref.get("api_key")
-
+                
                 raw_web = web_search(query, api_key=api_key)
-                answer = raw_web[:800].strip() if raw_web else "No reliable information found."
-                source_type = "internet"
-                # For internet answers: store empty contexts
-                stored_contexts = []
+                
+                # Check if web search returned good results
+                if raw_web and len(raw_web.strip()) > 50:
+                    answer = raw_web[:800].strip()
+                    source_type = "internet"
+                    stored_contexts = []
+                    fallback_reason = f"{fallback_reason} → Web search provided better answer"
+                else:
+                    # Web search failed or poor, use PDF anyway
+                    answer = pdf_answer
+                    source_type = "pdf"
+                    stored_contexts = contexts
+                    fallback_reason = f"{fallback_reason} → Web search failed, using PDF answer"
             else:
-                # High/Medium confidence: Use PDF answer
+                # Use PDF answer
                 answer = pdf_answer
                 source_type = "pdf"
-                # For PDF answers: store contexts for citations display
                 stored_contexts = contexts
-
+                fallback_reason = None
+            
+            # ======================================================
+            # Store debug information
+            # ======================================================
+            st.session_state.last_fallback_reason = fallback_reason
+            
             # Count output tokens
             tracker.count_output(answer)
             
             # Add assistant message to chat
             chat_manager.add_assistant_message(answer, source_type)
             
-            # Store contexts for the new assistant message to show citations later
-            # Get the index of the new message (last message in history)
+            # Store contexts for citations
             new_message_idx = len(active_chat.chat_history) - 1
             
-            # Initialize message_contexts if not exists
             if "message_contexts" not in st.session_state:
                 st.session_state.message_contexts = {}
             
-            # Store contexts for this specific message
             st.session_state.message_contexts[f"contexts_{new_message_idx}"] = stored_contexts
             
             # Rerun to update UI
